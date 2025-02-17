@@ -13,7 +13,12 @@ type InputScanner interface {
 }
 
 type BaseInputScanner struct {
+	name        string
 	outputColor *color.Color
+}
+
+func (bis *BaseInputScanner) SetName(name string) {
+	bis.name = name
 }
 
 func (bis *BaseInputScanner) SetOutputColor(color *color.Color) {

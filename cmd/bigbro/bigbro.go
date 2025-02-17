@@ -24,9 +24,11 @@ func (bb *BigBro) startScanner(scanner scanner.InputScanner) {
 	scanner.Start()
 }
 
+// Start all input scanners and block until all scanners stop
 func (bb *BigBro) Start() {
 	for _, scanner := range bb.inputScanners {
 		bb.wgInputScanners.Add(1)
 		go bb.startScanner(scanner)
 	}
+	bb.wgInputScanners.Wait()
 }
