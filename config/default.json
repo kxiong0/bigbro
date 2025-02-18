@@ -1,16 +1,29 @@
 {
+    "refreshIntervalS": "1s",
     "inputScanners": [
         {
-            "name": "scanner1",
             "type": "CMD", 
             "color": "red",
             "command": "echo 123; sleep 1; echo 321"
         },
         {
-            "name": "scanner1",
             "type": "CMD",
             "color": "black",
             "command": "echo yo"
+        },
+        {
+            "type": "K8S",
+            "color": "black",
+            "useK8sTimestamp": true,
+            "pod": {
+                "name": "pod",
+                "namespace": "ns",
+                "context": "ctx",
+                "container": "a",
+                "podSelector": {
+                    "app": "db"
+                }
+            }
         }
     ]
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"sync"
 
 	"github.com/kxiong0/bigbro/internal/scanner"
@@ -21,7 +22,10 @@ func (bb *BigBro) AddInputScanner(scanner scanner.InputScanner) {
 
 func (bb *BigBro) startScanner(scanner scanner.InputScanner) {
 	defer bb.wgInputScanners.Done()
-	scanner.Start()
+	err := scanner.Start()
+	if err != nil {
+		log.Fatalf("Failed to start scanner: %s\n", err.Error())
+	}
 }
 
 // Start all input scanners and block until all scanners stop

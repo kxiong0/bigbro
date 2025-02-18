@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 
@@ -72,11 +73,12 @@ func (c *Config) parseConfigMap() error {
 
 			scannerType, ok := inputScannerMap["type"]
 			if !ok {
-				log.Fatal("Empty scanner type")
+				return errors.New("empty scanner type")
 			}
 
 			scannerColor, ok := inputScannerMap["color"]
 			if !ok {
+				// TODO: assign random color
 				scannerColor = "black"
 			}
 			colorAttribute, ok := colorMap[scannerColor.(string)]
@@ -84,20 +86,46 @@ func (c *Config) parseConfigMap() error {
 				colorAttribute = color.FgBlack
 			}
 
+			var is scanner.InputScanner
 			if scannerType == "CMD" {
 				cmd, ok := inputScannerMap["command"]
 				if !ok {
-					log.Fatal("No command provided for scanner of type CMD")
+					return errors.New("no command provided for scanner of type CMD")
 				}
 				cis := &scanner.CmdInputScanner{}
-				cis.SetName(name.(string))
-				cis.SetOutputColor(color.New(colorAttribute))
 				cis.SetCmd(cmd.(string))
+				is = cis
+			} else if scannerType == "K8S" {
+				pod := inputScannerMap["pod"].(map[string]interface{})
 
-				c.inputScanners = append(c.inputScanners, cis)
+				podName := pod["name"].(string)
+				podSelector := pod["podSelector"].(map[string]interface{})
+				if podName == "" && podSelector == nil {
+					return errors.New("must provide one of pod name or podSelector for scanner of type K8S")
+				}
+
+				namespace, ok := pod["namespace"].(string)
+				if !ok {
+					log.Println("W! No namespace provided - using default namespace")
+					namespace = "default"
+				}
+				container := pod["container"].(string)
+
+				kis := &scanner.K8sInputScanner{}
+				kis.SetPodName(podName)
+				kis.SetPodSelector(podSelector)
+				kis.SetNamespace(namespace)
+				kis.SetContainer(container)
+				is = kis
 			} else {
-				log.Fatal("Unknown scanner type:", scannerType)
+				return fmt.Errorf("unknown scanner type: %s", scannerType)
 			}
+
+			// Set common fields
+			is.SetName(name.(string))
+			is.SetOutputColor(color.New(colorAttribute))
+			c.inputScanners = append(c.inputScanners, is)
+
 		}
 	}
 	return nil
