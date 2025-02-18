@@ -1,5 +1,5 @@
 {
-    "refreshIntervalS": "1s",
+    "refreshInterval": "1s",
     "inputScanners": [
         {
             "type": "CMD", 
