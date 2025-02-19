@@ -3,7 +3,9 @@ package scanner
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"log"
+	"os"
 	"os/exec"
 
 	"github.com/fatih/color"
@@ -65,12 +67,12 @@ func (cis *CmdInputScanner) Start() error {
 		outputColor = *color.New(color.FgBlack)
 	}
 
+	logger := &TimestampWriter{Writer: os.Stdout}
 	scanner := bufio.NewScanner(stdout)
-	scanner.Split(bufio.ScanWords)
+	scanner.Split(bufio.ScanLines)
 	for scanner.Scan() {
 		m := scanner.Text()
-		outputColor.Println(m)
-		// fmt.Fprintln(os.Stdout, colorRed, m, colorNone)
+		outputColor.Fprintln(logger, m)
 	}
 	cmd.Wait()
 	return nil
@@ -96,12 +98,39 @@ func (kis *K8sInputScanner) Start() error {
 		return err
 	}
 
+	var cmd string
 	if kis.Pod.Name != "" {
-		log.Printf("111")
+		cmd = fmt.Sprintf("kubectl logs %s", kis.Pod.Name)
 	} else if kis.Pod.PodSelector != nil {
-		log.Printf("2222")
+		cmd = "kubectl logs"
+		for key, value := range kis.Pod.PodSelector {
+			cmd = fmt.Sprintf("%s -l %s=%s", cmd, key, value)
+		}
 	} else {
 		return errors.New("must provide one of: podName, podSelector")
+	}
+	cmd = fmt.Sprintf("%s -n %s --timestamps=true -f", cmd, kis.Pod.Namespace)
+
+	log.Println(cmd)
+
+	execCmd := exec.Command("bash", "-c", cmd)
+
+	stdout, _ := execCmd.StdoutPipe()
+	execCmd.Start()
+
+	outputColorAttr, ok := colorMap[kis.OutputColor]
+	var outputColor color.Color
+	if ok {
+		outputColor = *color.New(outputColorAttr)
+	} else {
+		outputColor = *color.New(color.FgBlack)
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	scanner.Split(bufio.ScanLines)
+	for scanner.Scan() {
+		m := scanner.Text()
+		outputColor.Println(m)
 	}
 
 	return nil

@@ -16,10 +16,10 @@
             "color": "black",
             "useK8sTimestamp": true,
             "pod": {
-                "name": "pod",
-                "namespace": "ns",
-                "context": "ctx",
-                "container": "a",
+                "name": "kindnet-nhtz2",
+                "namespace": "kube-system",
+                "context": "kind-kind",
+                "container": "",
                 "podSelector": {
                     "app": "db"
                 }
