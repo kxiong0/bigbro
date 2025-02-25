@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 
 	"github.com/fatih/color"
@@ -24,13 +23,24 @@ var colorMap = map[string]color.Attribute{
 
 type InputScanner interface {
 	SetName(string)
-	SetOutputColor(string)
+	Init()
 	Start() error
+	Close()
+	GetOutputChan() chan string
 }
 
 type BaseInputScanner struct {
 	Name        string `json:"name"`
 	OutputColor string `json:"color"`
+	OutputChan  chan string
+}
+
+func (bis *BaseInputScanner) Init() {
+	bis.OutputChan = make(chan string, 10)
+}
+
+func (bis *BaseInputScanner) Close() {
+	close(bis.OutputChan)
 }
 
 func (bis *BaseInputScanner) SetName(name string) {
@@ -39,6 +49,19 @@ func (bis *BaseInputScanner) SetName(name string) {
 
 func (bis *BaseInputScanner) SetOutputColor(color string) {
 	bis.OutputColor = color
+}
+
+func (bis *BaseInputScanner) GetCMD() (string, error) {
+	return "", nil
+}
+
+func (bis *BaseInputScanner) Start() error {
+	bis.OutputChan <- "BaseScanner Start"
+	return nil
+}
+
+func (bis *BaseInputScanner) GetOutputChan() chan string {
+	return bis.OutputChan
 }
 
 type CmdInputScanner struct {
@@ -51,30 +74,32 @@ func (cis *CmdInputScanner) SetCmd(command string) {
 	cis.Command = command
 }
 
-// Need to use a pointer receiver to modify the actual struct,
-// Otherwise, a copy of the struct is passed.
+func (cis *CmdInputScanner) GetCMD() (string, error) {
+	return cis.Command, nil
+}
+
 func (cis *CmdInputScanner) Start() error {
-	cmd := exec.Command("bash", "-c", cis.Command)
-
-	stdout, _ := cmd.StdoutPipe()
-	cmd.Start()
-
-	outputColorAttr, ok := colorMap[cis.OutputColor]
-	var outputColor color.Color
-	if ok {
-		outputColor = *color.New(outputColorAttr)
-	} else {
-		outputColor = *color.New(color.FgBlack)
+	cmd, err := cis.GetCMD()
+	if err != nil {
+		return err
 	}
 
-	logger := &TimestampWriter{Writer: os.Stdout}
-	scanner := bufio.NewScanner(stdout)
-	scanner.Split(bufio.ScanLines)
+	execCmd := exec.Command("bash", "-c", cmd)
+	out, _ := execCmd.StdoutPipe()
+	if err := execCmd.Start(); err != nil {
+		return nil
+	}
+
+	scanner := bufio.NewScanner(out)
 	for scanner.Scan() {
-		m := scanner.Text()
-		outputColor.Fprintln(logger, m)
+		cis.OutputChan <- scanner.Text()
+		log.Println("got something")
+		log.Printf("chan: %d", len(cis.OutputChan))
+		if err := scanner.Err(); err != nil {
+			log.Println("Error scanning output:", err)
+		}
 	}
-	cmd.Wait()
+	log.Println("End scan")
 	return nil
 }
 
@@ -82,7 +107,7 @@ type K8sInputScanner struct {
 	UseK8sTimestamp bool
 	Pod             Pod
 
-	BaseInputScanner
+	CmdInputScanner
 }
 
 type Pod struct {
@@ -92,10 +117,10 @@ type Pod struct {
 	Container   string
 }
 
-func (kis *K8sInputScanner) Start() error {
+func (kis *K8sInputScanner) GetCMD() (string, error) {
 	_, err := exec.LookPath("kubectl")
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	var cmd string
@@ -107,31 +132,9 @@ func (kis *K8sInputScanner) Start() error {
 			cmd = fmt.Sprintf("%s -l %s=%s", cmd, key, value)
 		}
 	} else {
-		return errors.New("must provide one of: podName, podSelector")
-	}
-	cmd = fmt.Sprintf("%s -n %s --timestamps=true -f", cmd, kis.Pod.Namespace)
-
-	log.Println(cmd)
-
-	execCmd := exec.Command("bash", "-c", cmd)
-
-	stdout, _ := execCmd.StdoutPipe()
-	execCmd.Start()
-
-	outputColorAttr, ok := colorMap[kis.OutputColor]
-	var outputColor color.Color
-	if ok {
-		outputColor = *color.New(outputColorAttr)
-	} else {
-		outputColor = *color.New(color.FgBlack)
+		return "", errors.New("must provide one of: podName, podSelector")
 	}
 
-	scanner := bufio.NewScanner(stdout)
-	scanner.Split(bufio.ScanLines)
-	for scanner.Scan() {
-		m := scanner.Text()
-		outputColor.Println(m)
-	}
-
-	return nil
+	cmd = fmt.Sprintf("%s -n %s --timestamps=true --since=1s -f", cmd, kis.Pod.Namespace)
+	return cmd, nil
 }
