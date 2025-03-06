@@ -4,20 +4,45 @@ import (
 	"log"
 	"sync"
 
+	"github.com/kxiong0/bigbro/internal/config"
 	"github.com/kxiong0/bigbro/internal/scanner"
 )
 
 type BigBro struct {
 	wgInputScanners sync.WaitGroup
 	inputScanners   []scanner.InputScanner
-}
-
-func (bb *BigBro) Init() error {
-	return nil
+	ConfigFilePath  string
 }
 
 func (bb *BigBro) AddInputScanner(scanner scanner.InputScanner) {
 	bb.inputScanners = append(bb.inputScanners, scanner)
+}
+
+func (bb *BigBro) GetInputScanners() []scanner.InputScanner {
+	return bb.inputScanners
+}
+
+func (bb *BigBro) GetScannerChans() []chan string {
+	chans := []chan string{}
+	for _, value := range bb.inputScanners {
+		chans = append(chans, value.GetOutputChan())
+	}
+	return chans
+}
+
+func (bb *BigBro) Init() error {
+	// Load InputScanners according to config file at ConfigFilePath
+	c := config.Config{}
+	err := c.LoadConfigFile(bb.ConfigFilePath)
+	if err != nil {
+		return err
+	}
+	scanners := c.GetInputScanners()
+	for _, scanner := range scanners {
+		bb.AddInputScanner(scanner)
+		scanner.Init()
+	}
+	return nil
 }
 
 func (bb *BigBro) startScanner(scanner scanner.InputScanner) {
@@ -26,34 +51,21 @@ func (bb *BigBro) startScanner(scanner scanner.InputScanner) {
 	if err != nil {
 		log.Fatalf("Failed to run scanner: %s\n", err.Error())
 	}
-	log.Println("Start scanner return")
 }
 
 // Start all input scanners and block until all scanners stop
 func (bb *BigBro) Start() {
-	var listenerwg sync.WaitGroup
-	for i, scanner := range bb.inputScanners {
-		listenerwg.Add(1)
-		go func() {
-			for {
-				log.Printf("reading...")
-				val, ok := <-scanner.GetOutputChan()
-				if !ok {
-					break
-				}
-				log.Printf("GORoutine %d - %s", i, val)
-			}
-			listenerwg.Done()
-		}()
-	}
+	// for running scanners
 	for _, scanner := range bb.inputScanners {
 		bb.wgInputScanners.Add(1)
-		scanner.Init()
 		go bb.startScanner(scanner)
 	}
+}
+
+func (bb *BigBro) Stop() {
+	// wait for scanners to complete
 	bb.wgInputScanners.Wait()
 	for _, scanner := range bb.inputScanners {
 		scanner.Close()
 	}
-	listenerwg.Wait()
 }

@@ -1,50 +1,18 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"log"
-	"os/exec"
 	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kxiong0/bigbro/internal/config"
 )
 
 type logMsg struct {
 	timestamp time.Time
 	line      string
-}
-
-// Simulate a process that sends events at an irregular interval in real time.
-// In this case, we'll send events on the channel at a random interval between
-// 100 to 1000 milliseconds. As a command, Bubble Tea will run this
-// asynchronously.
-func listenForActivity(subs []chan string) tea.Cmd {
-	return func() tea.Msg {
-		cmd := exec.Command("bash", "-c", "kubectl logs -l app=kindnet  -n kube-system -f --since=1s")
-		out, _ := cmd.StdoutPipe()
-
-		// Run the command.
-		if err := cmd.Start(); err != nil {
-			return nil
-		}
-
-		// Read command output as it arrives.
-		buf := bufio.NewReader(out)
-		for {
-			line, err := buf.ReadString('\n')
-			if err == io.EOF {
-				return nil
-			}
-			if err != nil {
-				return nil
-			}
-			// Send output to our program.
-			subs[0] <- fmt.Sprintf("Current time: %s - echo: %s", time.Now(), line)
-		}
-	}
 }
 
 // A command that waits for the activity on a channel.
@@ -63,7 +31,6 @@ type model struct {
 
 func (m model) Init() tea.Cmd {
 	return tea.Batch(
-		listenForActivity(m.logInputChans),  // generate activity
 		waitForActivity(m.logInputChans[0]), // wait for activity
 	)
 }
@@ -121,6 +88,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func main() {
+	c := config.Config{}
+	err := c.LoadConfigFile("config/default.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	scanners := c.GetInputScanners()
+	bb := BigBro{}
+	for _, scanner := range scanners {
+		bb.AddInputScanner(scanner)
+	}
+	bb.Start()
+
 	m := model{}
 	m.logInputChans = []chan string{make(chan string)}
 	p := tea.NewProgram(

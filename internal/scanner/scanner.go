@@ -7,6 +7,7 @@ import (
 	"log"
 	"os/exec"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/fatih/color"
 )
 
@@ -92,14 +93,15 @@ func (cis *CmdInputScanner) Start() error {
 
 	scanner := bufio.NewScanner(out)
 	for scanner.Scan() {
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color("13"))
+
+		log.Println(style.Render(scanner.Text()))
+
 		cis.OutputChan <- scanner.Text()
-		log.Println("got something")
-		log.Printf("chan: %d", len(cis.OutputChan))
 		if err := scanner.Err(); err != nil {
 			log.Println("Error scanning output:", err)
 		}
 	}
-	log.Println("End scan")
 	return nil
 }
 
