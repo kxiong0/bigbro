@@ -38,9 +38,10 @@ func (bb *BigBro) Init() error {
 		return err
 	}
 	scanners := c.GetInputScanners()
-	for _, scanner := range scanners {
+	for i, scanner := range scanners {
 		bb.AddInputScanner(scanner)
 		scanner.Init()
+		scanner.SetID(i)
 	}
 	return nil
 }
@@ -60,6 +61,7 @@ func (bb *BigBro) Start() {
 		bb.wgInputScanners.Add(1)
 		go bb.startScanner(scanner)
 	}
+	log.Println("Scanners started")
 }
 
 func (bb *BigBro) Stop() {
@@ -68,4 +70,5 @@ func (bb *BigBro) Stop() {
 	for _, scanner := range bb.inputScanners {
 		scanner.Close()
 	}
+	log.Println("Scanners stopped")
 }

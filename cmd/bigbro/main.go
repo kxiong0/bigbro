@@ -13,6 +13,7 @@ import (
 type logMsg struct {
 	timestamp time.Time
 	line      string
+	source    string
 }
 
 // A command that waits for the activity on a channel.
@@ -64,7 +65,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Whether or not to respond to the mouse. The mouse must be enabled in
 			// Bubble Tea for this to work. For details, see the Bubble Tea docs.
 			m.viewport.MouseWheelEnabled = true
-			m.viewport.SetContent("\n1111\n1111\n1111\n1111\n1111\n1111\n2222\n")
 			m.ready = true
 		} else {
 			m.viewport.Width = msg.Width

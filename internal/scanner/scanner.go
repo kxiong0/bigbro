@@ -16,12 +16,15 @@ type InputScanner interface {
 	Start() error
 	Close()
 	GetOutputChan() chan string
+	SetID(int)
+	GetID() int
 }
 
 type BaseInputScanner struct {
 	Name        string `json:"name"`
 	OutputColor string `json:"color"`
 	OutputChan  chan string
+	Id          int
 }
 
 func (bis *BaseInputScanner) Init() {
@@ -42,6 +45,14 @@ func (bis *BaseInputScanner) SetOutputColor(color string) {
 
 func (bis *BaseInputScanner) GetCMD() (string, error) {
 	return "", nil
+}
+
+func (bis *BaseInputScanner) SetID(id int) {
+	bis.Id = id
+}
+
+func (bis *BaseInputScanner) GetID() int {
+	return bis.Id
 }
 
 func (bis *BaseInputScanner) Start() error {
