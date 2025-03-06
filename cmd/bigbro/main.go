@@ -64,14 +64,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Whether or not to respond to the mouse. The mouse must be enabled in
 			// Bubble Tea for this to work. For details, see the Bubble Tea docs.
 			m.viewport.MouseWheelEnabled = true
-			m.viewport.SetContent("111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111\n1111\n1111\n1111\n1111\n1111\n1111\n2222\n")
+			m.viewport.SetContent("\n1111\n1111\n1111\n1111\n1111\n1111\n2222\n")
 			m.ready = true
 		} else {
 			m.viewport.Width = msg.Width
 			m.viewport.Height = msg.Height
 		}
 	case logMsg:
-		m.content = fmt.Sprintf("%s%s", m.content, msg.line)
+		m.content = fmt.Sprintf("%s\n[%s] %s", m.content, msg.timestamp.Format(time.RFC3339Nano), msg.line)
 		m.viewport.SetContent(m.content)
 		return m, waitForActivity(m.logInputChans[0]) // wait for next event
 	default:

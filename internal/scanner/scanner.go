@@ -8,19 +8,7 @@ import (
 	"os/exec"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/fatih/color"
 )
-
-var colorMap = map[string]color.Attribute{
-	"black":   color.FgBlack,
-	"white":   color.FgWhite,
-	"red":     color.FgRed,
-	"green":   color.FgGreen,
-	"yellow":  color.FgYellow,
-	"blue":    color.FgBlue,
-	"magenta": color.FgMagenta,
-	"cyan":    color.FgCyan,
-}
 
 type InputScanner interface {
 	SetName(string)
@@ -94,10 +82,7 @@ func (cis *CmdInputScanner) Start() error {
 	scanner := bufio.NewScanner(out)
 	for scanner.Scan() {
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color("13"))
-
-		log.Println(style.Render(scanner.Text()))
-
-		cis.OutputChan <- scanner.Text()
+		cis.OutputChan <- style.Render(scanner.Text())
 		if err := scanner.Err(); err != nil {
 			log.Println("Error scanning output:", err)
 		}

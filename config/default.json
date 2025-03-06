@@ -1,29 +1,16 @@
 {
     "refreshInterval": "1s",
+    "showTimestamp": false,
     "inputScanners": [
         {
             "type": "CMD", 
             "color": "red",
-            "command": "echo 123; sleep 1; echo 321"
+            "command": "echo 123;echo 123;echo 123;echo 123;echo 123; sleep 1; echo 321"
         },
         {
             "type": "CMD",
             "color": "black",
             "command": "echo yo"
-        },
-        {
-            "type": "K8S",
-            "color": "black",
-            "useK8sTimestamp": true,
-            "pod": {
-                "name": "kindnet-nhtz2",
-                "namespace": "kube-system",
-                "context": "kind-kind",
-                "container": "",
-                "podSelector": {
-                    "app": "db"
-                }
-            }
         }
     ]
 }
