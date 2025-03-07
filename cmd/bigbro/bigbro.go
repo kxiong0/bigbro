@@ -5,32 +5,28 @@ import (
 	"sync"
 
 	"github.com/kxiong0/bigbro/internal/config"
-	"github.com/kxiong0/bigbro/internal/scanner"
+	"github.com/kxiong0/bigbro/internal/log_collector"
 )
 
 type BigBro struct {
+	ConfigFilePath string
+	LogOutputChan  chan log_collector.LogMsg
+
 	wgInputScanners sync.WaitGroup
-	inputScanners   []scanner.InputScanner
-	ConfigFilePath  string
+	inputScanners   []log_collector.InputScanner
 }
 
-func (bb *BigBro) AddInputScanner(scanner scanner.InputScanner) {
+func (bb *BigBro) AddInputScanner(scanner log_collector.InputScanner) {
 	bb.inputScanners = append(bb.inputScanners, scanner)
 }
 
-func (bb *BigBro) GetInputScanners() []scanner.InputScanner {
+func (bb *BigBro) GetInputScanners() []log_collector.InputScanner {
 	return bb.inputScanners
 }
 
-func (bb *BigBro) GetScannerChans() []chan string {
-	chans := []chan string{}
-	for _, value := range bb.inputScanners {
-		chans = append(chans, value.GetOutputChan())
-	}
-	return chans
-}
-
 func (bb *BigBro) Init() error {
+	bb.LogOutputChan = make(chan log_collector.LogMsg, 10)
+
 	// Load InputScanners according to config file at ConfigFilePath
 	c := config.Config{}
 	err := c.LoadConfigFile(bb.ConfigFilePath)
@@ -40,13 +36,13 @@ func (bb *BigBro) Init() error {
 	scanners := c.GetInputScanners()
 	for i, scanner := range scanners {
 		bb.AddInputScanner(scanner)
-		scanner.Init()
+		scanner.Init(bb.LogOutputChan)
 		scanner.SetID(i)
 	}
 	return nil
 }
 
-func (bb *BigBro) startScanner(scanner scanner.InputScanner) {
+func (bb *BigBro) startScanner(scanner log_collector.InputScanner) {
 	defer bb.wgInputScanners.Done()
 	err := scanner.Start()
 	if err != nil {

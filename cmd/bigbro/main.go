@@ -8,31 +8,28 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/kxiong0/bigbro/internal/log_collector"
 )
 
-type logMsg struct {
-	timestamp time.Time
-	line      string
-	source    string
-}
-
 // A command that waits for the activity on a channel.
-func waitForActivity(sub chan string) tea.Cmd {
+func waitForActivity(sub chan log_collector.LogMsg) tea.Cmd {
 	return func() tea.Msg {
-		return logMsg{timestamp: time.Now(), line: <-sub}
+		return <-sub
 	}
 }
 
 type model struct {
-	ready         bool
-	viewport      viewport.Model
-	content       string
-	logInputChans []chan string
+	ready    bool
+	viewport viewport.Model
+	content  string // displayed logs
+	bb       *BigBro
 }
 
 func (m model) Init() tea.Cmd {
 	return tea.Batch(
-		waitForActivity(m.logInputChans[0]), // wait for activity
+		waitForActivity(m.bb.LogOutputChan), // wait for activity
 	)
 }
 
@@ -70,10 +67,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.Width = msg.Width
 			m.viewport.Height = msg.Height
 		}
-	case logMsg:
-		m.content = fmt.Sprintf("%s\n[%s] %s", m.content, msg.timestamp.Format(time.RFC3339Nano), msg.line)
+	case log_collector.LogMsg:
+		logMsgStr := fmt.Sprintf("[%s] [%d] %s", msg.Timestamp.Format(time.RFC3339Nano), msg.ScannerIdx, msg.Line)
+		style := lipgloss.NewStyle().
+			Foreground(
+				lipgloss.Color(m.bb.inputScanners[msg.ScannerIdx].GetColor()),
+			)
+		log.Println(m.bb.inputScanners[msg.ScannerIdx].GetColor())
+		log.Println(m.bb.inputScanners[msg.ScannerIdx])
+		m.content = fmt.Sprintf("%s\n%s", m.content, style.Render((logMsgStr)))
 		m.viewport.SetContent(m.content)
-		return m, waitForActivity(m.logInputChans[0]) // wait for next event
+		return m, waitForActivity(m.bb.LogOutputChan) // wait for next event
 	default:
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
@@ -99,14 +103,14 @@ func main() {
 	log.SetOutput(file)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	bb := BigBro{ConfigFilePath: "config/default.json"}
+	bb := &BigBro{ConfigFilePath: "config/default.json"}
 	err = bb.Init()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	m := model{}
-	m.logInputChans = bb.GetScannerChans()
+	m.bb = bb
 	p := tea.NewProgram(
 		m,
 		tea.WithMouseAllMotion(),

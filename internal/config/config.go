@@ -5,12 +5,12 @@ import (
 	"errors"
 	"os"
 
-	"github.com/kxiong0/bigbro/internal/scanner"
+	"github.com/kxiong0/bigbro/internal/log_collector"
 )
 
 type Config struct {
 	configMap     map[string]json.RawMessage
-	inputScanners []scanner.InputScanner
+	inputScanners []log_collector.InputScanner
 }
 
 func (c *Config) LoadConfigFile(filename string) error {
@@ -26,7 +26,7 @@ func (c *Config) LoadConfigFile(filename string) error {
 	return nil
 }
 
-func (c *Config) GetInputScanners() []scanner.InputScanner {
+func (c *Config) GetInputScanners() []log_collector.InputScanner {
 	return c.inputScanners
 }
 
@@ -59,14 +59,14 @@ func (c *Config) parseConfigMap() error {
 			return err
 		}
 
-		var is scanner.InputScanner
+		var is log_collector.InputScanner
 		scannerType := scannerMap["type"].(string)
 		switch scannerType {
 		case "CMD":
-			is = &scanner.CmdInputScanner{}
+			is = &log_collector.CmdInputScanner{}
 			err = json.Unmarshal(inputScanner, &is)
 		case "K8S":
-			is = &scanner.K8sInputScanner{}
+			is = &log_collector.K8sInputScanner{}
 			err = json.Unmarshal(inputScanner, &is)
 		default:
 			return errors.New("invalid scanner type")

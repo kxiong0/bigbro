@@ -4,12 +4,12 @@
     "inputScanners": [
         {
             "type": "CMD", 
-            "color": "red",
+            "color": "20",
             "command": "echo 123;echo 123;echo 123;echo 123;echo 123; sleep 1; echo 321"
         },
         {
             "type": "CMD",
-            "color": "black",
+            "color": "120",
             "command": "echo yo"
         }
     ]

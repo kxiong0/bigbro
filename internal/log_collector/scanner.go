@@ -1,4 +1,4 @@
-package scanner
+package log_collector
 
 import (
 	"bufio"
@@ -6,62 +6,56 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
-
-	"github.com/charmbracelet/lipgloss"
+	"time"
 )
 
 type InputScanner interface {
-	SetName(string)
-	Init()
+	Init(chan LogMsg)
 	Start() error
 	Close()
-	GetOutputChan() chan string
+	SetName(string)
 	SetID(int)
 	GetID() int
+	GetColor() string
+	GetOutputChan() chan LogMsg
 }
 
 type BaseInputScanner struct {
-	Name        string `json:"name"`
-	OutputColor string `json:"color"`
-	OutputChan  chan string
-	Id          int
+	Name       string `json:"name"`
+	Color      string `json:"color"`
+	OutputChan chan LogMsg
+	Id         int
 }
 
-func (bis *BaseInputScanner) Init() {
-	bis.OutputChan = make(chan string, 10)
+func (bis *BaseInputScanner) Init(channel chan LogMsg) {
+	bis.OutputChan = channel
 }
 
 func (bis *BaseInputScanner) Close() {
-	close(bis.OutputChan)
 }
 
 func (bis *BaseInputScanner) SetName(name string) {
 	bis.Name = name
 }
 
-func (bis *BaseInputScanner) SetOutputColor(color string) {
-	bis.OutputColor = color
-}
-
-func (bis *BaseInputScanner) GetCMD() (string, error) {
-	return "", nil
-}
-
 func (bis *BaseInputScanner) SetID(id int) {
 	bis.Id = id
+}
+
+func (bis *BaseInputScanner) GetColor() string {
+	return bis.Color
 }
 
 func (bis *BaseInputScanner) GetID() int {
 	return bis.Id
 }
 
-func (bis *BaseInputScanner) Start() error {
-	bis.OutputChan <- "BaseScanner Start"
-	return nil
-}
-
-func (bis *BaseInputScanner) GetOutputChan() chan string {
+func (bis *BaseInputScanner) GetOutputChan() chan LogMsg {
 	return bis.OutputChan
+}
+func (bis *BaseInputScanner) Start() error {
+	bis.OutputChan <- LogMsg{Line: "BaseScanner"}
+	return nil
 }
 
 type CmdInputScanner struct {
@@ -92,8 +86,8 @@ func (cis *CmdInputScanner) Start() error {
 
 	scanner := bufio.NewScanner(out)
 	for scanner.Scan() {
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color("13"))
-		cis.OutputChan <- style.Render(scanner.Text())
+		logmsg := LogMsg{Timestamp: time.Now(), Line: scanner.Text(), ScannerIdx: cis.Id}
+		cis.OutputChan <- logmsg
 		if err := scanner.Err(); err != nil {
 			log.Println("Error scanning output:", err)
 		}
