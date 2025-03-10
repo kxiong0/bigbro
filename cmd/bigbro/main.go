@@ -1,17 +1,21 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/evertras/bubble-table/table"
 
 	"github.com/kxiong0/bigbro/internal/log_collector"
 )
+
+var baseStyle = lipgloss.NewStyle().
+	BorderStyle(lipgloss.NormalBorder()).
+	BorderForeground(lipgloss.Color("240"))
 
 // A command that waits for the activity on a channel.
 func waitForActivity(sub chan log_collector.LogMsg) tea.Cmd {
@@ -21,10 +25,45 @@ func waitForActivity(sub chan log_collector.LogMsg) tea.Cmd {
 }
 
 type model struct {
-	ready    bool
-	viewport viewport.Model
-	content  string // displayed logs
-	bb       *BigBro
+	bb *BigBro // Scanner manager
+
+	table table.Model
+	rows  []table.Row
+
+	// Window dimensions
+	totalWidth  int
+	totalHeight int
+
+	// Table dimensions
+	horizontalMargin int
+	verticalMargin   int
+}
+
+func (m model) rowStyleFunc(input table.RowStyleFuncInput) lipgloss.Style {
+	scannerIdx := 0
+	switch value := input.Row.Data["source"].(type) {
+	case string:
+		var err error
+		scannerIdx, err = strconv.Atoi(value)
+		if err != nil {
+			return lipgloss.NewStyle().
+				Foreground(
+					lipgloss.Color("123"),
+				)
+		}
+	case int:
+		scannerIdx = value
+	default:
+		return lipgloss.NewStyle().
+			Foreground(
+				lipgloss.Color("123"),
+			)
+	}
+
+	return lipgloss.NewStyle().
+		Foreground(
+			lipgloss.Color(m.bb.inputScanners[scannerIdx].GetColor()),
+		)
 }
 
 func (m model) Init() tea.Cmd {
@@ -34,10 +73,7 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) View() string {
-	return fmt.Sprintf(
-		"%s",
-		m.viewport.View(),
-	)
+	return m.table.View()
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -48,47 +84,53 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if k := msg.String(); k == "ctrl+c" || k == "q" || k == "esc" {
+		switch msg.String() {
+		case "esc":
+			// if m.table.Focused() {
+			// 	m.table.Blur()
+			// } else {
+			// 	m.table.Focus()
+			// }
+		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "enter":
+			// return m, tea.Batch(
+			// 	tea.Printf("Let's go to %s!", m.table.SelectedRow()[1]),
+			// )
 		}
 	case tea.WindowSizeMsg:
-		if !m.ready {
-			// Since this program is using the full size of the viewport we
-			// need to wait until we've received the window dimensions before
-			// we can initialize the viewport. The initial dimensions come in
-			// quickly, though asynchronously, which is why we wait for them
-			// here.
-			m.viewport = viewport.New(msg.Width, msg.Height)
-			// Whether or not to respond to the mouse. The mouse must be enabled in
-			// Bubble Tea for this to work. For details, see the Bubble Tea docs.
-			m.viewport.MouseWheelEnabled = true
-			m.ready = true
-		} else {
-			m.viewport.Width = msg.Width
-			m.viewport.Height = msg.Height
-		}
+		m.totalWidth = msg.Width
+		m.totalHeight = msg.Height
+		m.recalculateTable()
 	case log_collector.LogMsg:
-		logMsgStr := fmt.Sprintf("[%s] [%d] %s", msg.Timestamp.Format(time.RFC3339Nano), msg.ScannerIdx, msg.Line)
-		style := lipgloss.NewStyle().
-			Foreground(
-				lipgloss.Color(m.bb.inputScanners[msg.ScannerIdx].GetColor()),
-			)
-		log.Println(m.bb.inputScanners[msg.ScannerIdx].GetColor())
-		log.Println(m.bb.inputScanners[msg.ScannerIdx])
-		m.content = fmt.Sprintf("%s\n%s", m.content, style.Render((logMsgStr)))
-		m.viewport.SetContent(m.content)
-		return m, waitForActivity(m.bb.LogOutputChan) // wait for next event
-	default:
-		var cmd tea.Cmd
-		m.viewport, cmd = m.viewport.Update(msg)
-		return m, cmd
-	}
+		log.Println("Add line to rows")
+		row := table.NewRow(table.RowData{
+			"time":   msg.Timestamp.Format(time.RFC3339),
+			"source": msg.ScannerIdx,
+			"line":   msg.Line,
+		})
+		m.rows = append(m.rows, row)
+		m.table = m.table.WithRows(m.rows)
 
-	// Handle keyboard and mouse events in the viewport
-	m.viewport, cmd = m.viewport.Update(msg)
+		cmds = append(cmds, waitForActivity(m.bb.LogOutputChan))
+	}
+	m.table, cmd = m.table.Update(msg)
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
+}
+func (m *model) recalculateTable() {
+	m.table = m.table.
+		WithTargetWidth(m.calculateWidth()).
+		WithMinimumHeight(m.calculateHeight())
+}
+
+func (m model) calculateWidth() int {
+	return m.totalWidth - m.horizontalMargin - 4
+}
+
+func (m model) calculateHeight() int {
+	return m.totalHeight - m.verticalMargin - 2
 }
 
 func main() {
@@ -103,14 +145,27 @@ func main() {
 	log.SetOutput(file)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
+	m := model{}
 	bb := &BigBro{ConfigFilePath: "config/default.json"}
 	err = bb.Init()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	m := model{}
 	m.bb = bb
+
+	// Init table
+	t := table.New(
+		[]table.Column{
+			table.NewColumn("time", "Time", 20),
+			table.NewFlexColumn("source", "Source", 2),
+			table.NewFlexColumn("line", "Line", 10),
+		},
+	).
+		BorderRounded().
+		WithBaseStyle(baseStyle).
+		WithRowStyleFunc(m.rowStyleFunc)
+
+	m.table = t
 	p := tea.NewProgram(
 		m,
 		tea.WithMouseAllMotion(),
